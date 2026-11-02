@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Waitlist — status</title>
+<style>
+  body { font-family: ui-monospace, SFMono-Regular, monospace; margin: 24px; background: #0c0a09; color: #e7e5e4; }
+  h1 { font-size: 15px; color: #a8a29e; font-weight: 500; }
+  .band { display: inline-block; padding: 4px 14px; border-radius: 6px; font-weight: 600; }
+  .band.up { background: #14532d; color: #bbf7d0; }
+  .band.stalled { background: #713f12; color: #fde68a; }
+  table { border-collapse: collapse; margin-top: 18px; font-size: 12px; }
+  td, th { padding: 4px 14px 4px 0; text-align: left; border-bottom: 1px solid #292524; }
+  code { color: #a8a29e; }
+</style>
+</head>
+<body>
+<h1>Waitlist status · <span id="band" class="band up">ALL SYSTEMS OPERATIONAL</span></h1>
+<table id="t"></table>
+<script type="module">
+  const t = document.getElementById("t");
+  const band = document.getElementById("band");
+  let stalled = false;
+  async function tick() {
+    try {
+      const h = await (await fetch("/health")).json();
+      const s = await (await fetch("/stats")).json();
+      stalled = h.consumer.status !== "up" || h.queue.pending > 100;
+      band.className = `band ${stalled ? "stalled" : "up"}`;
+      band.textContent = stalled
+        ? "DEGRADED · CONFIRMATIONS STALLED"
+        : "ALL SYSTEMS OPERATIONAL";
+      t.innerHTML = `
+        <tr><th>api</th><td>${h.api}</td></tr>
+        <tr><th>consumer</th><td>${h.consumer.status}</td></tr>
+        <tr><th>last beat</th><td>${h.consumer.last_beat_seconds_ago ?? "never"}s ago · ${h.consumer.processed} processed</td></tr>
+        <tr><th>queue</th><td>${h.queue.pending} pending · oldest ${h.queue.oldest}m</td></tr>
+        ${s.map((e) => `<tr><th>${e.name}</th><td>${e.rsvps} RSVPs · ${e.confirmations} queued · cap ${e.capacity}</td></tr>`).join("")}`;
+    } catch {
+      stalled = true;
+      band.className = "band stalled";
+      band.textContent = "DEGRADED · STATUS UNAVAILABLE";
+    }
+  }
+  tick();
+  setInterval(tick, 2000);
+</script>
+</body>
+</html>

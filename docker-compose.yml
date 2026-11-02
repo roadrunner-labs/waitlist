@@ -1,0 +1,98 @@
+# Waitlist: the RSVP product running in production for the AgentHive team demo.
+#
+# Deploys are merges: the sync service pulls origin/main into a shared tree, stamps the
+# commit, and pokes the api to reload, so a merged PR is live seconds later.
+name: waitlist
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: waitlist
+      POSTGRES_PASSWORD: waitlist
+      POSTGRES_DB: waitlist
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U waitlist"]
+      interval: 2s
+      retries: 30
+
+  api:
+    image: node:22-bookworm-slim
+    working_dir: /srv/waitlist/api
+    command:
+      [
+        "sh",
+        "-c",
+        "npm ci --omit=dev --no-audit --silent && mkdir -p /run/log && exec sh -c 'set -o pipefail; node server.js 2>&1 | tee /run/log/api.log'",
+      ]
+    environment:
+      DATABASE_URL: postgres://waitlist:waitlist@db:5432/waitlist
+      ADMIN_TOKEN: waitlist-ops
+      PORT: 4001
+    ports:
+      - "127.0.0.1:4001:4001"
+    volumes:
+      - .:/srv/waitlist
+      - run:/run
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  consumer:
+    image: node:22-bookworm-slim
+    working_dir: /srv/waitlist/api
+    command:
+      [
+        "sh",
+        "-c",
+        "npm ci --omit=dev --no-audit --silent && mkdir -p /run/log && exec sh -c 'set -o pipefail; node consumer.js 2>&1 | tee /run/log/consumer.log'",
+      ]
+    environment:
+      DATABASE_URL: postgres://waitlist:waitlist@db:5432/waitlist
+      ITEM_PAUSE_MS: "1200"
+    volumes:
+      - .:/srv/waitlist
+      - run:/run
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  sync:
+    build: ./tools/sync
+    environment:
+      REPO_URL: ${WAITLIST_REPO:-https://github.com/roadrunner-labs/waitlist.git}
+      ADMIN_TOKEN: waitlist-ops
+      API_URL: http://api:4001
+    volumes:
+      - .:/srv/waitlist
+      - run:/run
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # Turned on for the demo: `docker compose --profile load up -d loadgen`.
+  loadgen:
+    profiles: [load]
+    image: node:22-bookworm-slim
+    working_dir: /srv/waitlist/tools
+    command: ["node", "loadgen.mjs"]
+    environment:
+      API_URL: http://api:4001
+      EVENT_ID: "1"
+      EVERY_MS: "900"
+    volumes:
+      - ./tools:/srv/waitlist/tools:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  run:

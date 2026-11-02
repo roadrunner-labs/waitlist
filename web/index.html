@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Waitlist — RSVP for launch events</title>
+<style>
+  body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; background: #faf7f2; color: #1c1917; }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  p.sub { color: #57534e; margin: 0 0 28px; }
+  .card { background: #fff; border: 1px solid #e7e5e4; border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 2px; font-size: 16px; }
+  .card .who { color: #78716c; font-size: 13px; margin-bottom: 14px; }
+  label { display: block; font-size: 13px; color: #57534e; margin: 10px 0 4px; }
+  input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #d6d3d1; border-radius: 8px; font: inherit; }
+  button { margin-top: 14px; background: #dc2626; border: none; color: #fff; padding: 9px 16px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .ok { color: #047857; font-size: 13px; margin-top: 10px; }
+  .err { color: #b91c1c; font-size: 13px; margin-top: 10px; }
+  .list { font-size: 13px; color: #57534e; }
+  .list .rsvp { padding: 6px 0; border-top: 1px solid #f5f5f4; display: flex; justify-content: space-between; gap: 8px; }
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid #e7e5e4; }
+  .pill.on { color: #047857; border-color: #a7f3d0; background: #ecfdf5; }
+  .pill.wait { color: #b45309; border-color: #fde68a; background: #fffbeb; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Waitlist</h1>
+  <p class="sub">RSVP for the next launch events. Attendees get email confirmation.</p>
+  <div id="events"></div>
+</main>
+<script type="module">
+  const $ = (sel) => document.querySelector(sel);
+  const stats = await (await fetch("/stats")).json();
+  const list = await (await fetch("/emails")).json().catch(() => []);
+
+  for (const event of stats) {
+    const attendees = await (await fetch(`/rsvps?event_id=${event.id}`)).json();
+    const card = document.createElement("div");
+    card.className = "card";
+    const left = event.capacity - event.rsvps;
+    card.innerHTML = `
+      <h2>${event.name}</h2>
+      <div class="who">${event.capacity} seats · ${event.rsvps} RSVPs · ${left} left</div>
+      <form data-event="${event.id}">
+        <label>Your name<input name="name" required maxlength="80" /></label>
+        <label>Email<input name="email" type="email" required maxlength="120" /></label>
+        <label>Party size<input name="guests" type="number" min="1" max="12" value="1" /></label>
+        <button>RSVP</button>
+        <p class="msg"></p>
+      </form>
+      <div class="list">
+        ${attendees.slice(0, 5).map((r) => `
+          <div class="rsvp"><span>${r.name} +${r.guests - 1}</span>
+          <span class="pill ${r.confirmed ? "on" : "wait"}">${r.confirmed ? "confirmed" : "waiting"}</span></div>`).join("")}
+      </div>`;
+    $("#events").append(card);
+    card.querySelector("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = new FormData(e.target);
+      const msg = card.querySelector(".msg");
+      msg.textContent = "";
+      const res = await fetch("/rsvps", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          event_id: event.id,
+          name: form.get("name"),
+          email: form.get("email"),
+          guests: Number(form.get("guests") ?? 1),
+        }),
+      });
+      const body = await res.json();
+      if (res.ok) {
+        msg.className = "ok";
+        msg.textContent = `You're on the list — confirmation heading to ${form.get("email")}.`;
+        e.target.querySelector("button").disabled = true;
+      } else {
+        msg.className = "err";
+        msg.textContent = body.error ?? "Something went wrong; try again.";
+      }
+    });
+  }
+</script>
+</body>
+</html>
