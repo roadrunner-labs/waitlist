@@ -54,8 +54,8 @@ SELECT 1,
        'guest' || g || '@example.dev',
        1 + g % 3,
        true,
-       now() - (g || ' minutes'),
-       now() - (g || ' minutes')
+       now() - make_interval(mins => g),
+       now() - make_interval(mins => g)
   FROM generate_series(1, 480) AS g;
 
 CREATE INDEX queue_open_idx ON queue (id) WHERE claimed_at IS NULL;
