@@ -26,9 +26,9 @@ services:
     working_dir: /srv/waitlist/api
     command:
       [
-        "sh",
+        "bash",
         "-c",
-        "npm ci --omit=dev --no-audit --silent && mkdir -p /run/log && exec sh -c 'set -o pipefail; node server.js 2>&1 | tee /run/log/api.log'",
+        "npm ci --omit=dev --no-audit --silent && mkdir -p /run/log && exec bash -c 'set -o pipefail; node server.js 2>&1 | tee /run/log/api.log'",
       ]
     environment:
       DATABASE_URL: postgres://waitlist:waitlist@db:5432/waitlist
@@ -49,9 +49,9 @@ services:
     working_dir: /srv/waitlist/api
     command:
       [
-        "sh",
+        "bash",
         "-c",
-        "npm ci --omit=dev --no-audit --silent && mkdir -p /run/log && exec sh -c 'set -o pipefail; node consumer.js 2>&1 | tee /run/log/consumer.log'",
+        "npm ci --omit=dev --no-audit --silent && mkdir -p /run/log && exec bash -c 'set -o pipefail; node consumer.js 2>&1 | tee /run/log/consumer.log'",
       ]
     environment:
       DATABASE_URL: postgres://waitlist:waitlist@db:5432/waitlist
